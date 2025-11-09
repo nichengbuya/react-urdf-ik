@@ -1,0 +1,40 @@
+{
+    "robots": [
+        {
+            "name": "TX-90",
+            "type": "robotic arm",
+            "manufacturer": "Staubli",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/tx90.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/staubli_experimental/tree/256a71acea2161b64e12af1a6b925a7f26695007/staubli_tx90_support",
+            "id": 237
+        },
+        {
+            "name": "TX-90L",
+            "type": "robotic arm",
+            "manufacturer": "Staubli",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/tx90l.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/staubli_experimental/tree/256a71acea2161b64e12af1a6b925a7f26695007/staubli_tx90_support",
+            "id": 238
+        },
+        {
+            "name": "TX-90XL",
+            "type": "robotic arm",
+            "manufacturer": "Staubli",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/tx90xl.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/staubli_experimental/tree/256a71acea2161b64e12af1a6b925a7f26695007/staubli_tx90_support",
+            "id": 239
+        }
+    ]
+}

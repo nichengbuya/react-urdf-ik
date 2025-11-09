@@ -1,0 +1,28 @@
+{
+    "robots": [
+        {
+            "name": "M-430iA/2F",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/m430ia2f.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_m430ia_support",
+            "id": 202
+        },
+        {
+            "name": "M-430iA/2P",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/m430ia2p.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_m430ia_support",
+            "id": 203
+        }
+    ]
+}

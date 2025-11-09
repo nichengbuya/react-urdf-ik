@@ -1,0 +1,64 @@
+{
+    "robots": [
+        {
+            "name": "R-2000iC/125L",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/r2000ic125l.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc_experimental/tree/faf8a758f7b25ae7b31ee836933102bd066dc528/fanuc_r2000ic_support",
+            "id": 212
+        },
+        {
+            "name": "R-2000iC/165F",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/r2000ic165f.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc_experimental/tree/faf8a758f7b25ae7b31ee836933102bd066dc528/fanuc_r2000ic_support",
+            "id": 213
+        },
+        {
+            "name": "R-2000iC/210F",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/r2000ic210f.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc_experimental/tree/faf8a758f7b25ae7b31ee836933102bd066dc528/fanuc_r2000ic_support",
+            "id": 214
+        },
+        {
+            "name": "R-2000iC/210L",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/r2000ic210l.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc_experimental/tree/faf8a758f7b25ae7b31ee836933102bd066dc528/fanuc_r2000ic_support",
+            "id": 215
+        },
+        {
+            "name": "R-2000iC/270F",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/r2000ic270f.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc_experimental/tree/faf8a758f7b25ae7b31ee836933102bd066dc528/fanuc_r2000ic_support",
+            "id": 216
+        }
+    ]
+}

@@ -1,0 +1,88 @@
+{
+    "robots": [
+        {
+            "name": "LR Mate 200iD",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/lrmate200id.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_lrmate200id_support",
+            "id": 188
+        },
+        {
+            "name": "LR Mate 200iD/4S",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/lrmate200id4s.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_lrmate200id_support",
+            "id": 189
+        },
+        {
+            "name": "LR Mate 200iD/4SC",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/lrmate200id4sc.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_lrmate200id_support",
+            "id": 190
+        },
+        {
+            "name": "LR Mate 200iD/4SH",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/lrmate200id4sh.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_lrmate200id_support",
+            "id": 191
+        },
+        {
+            "name": "LR Mate 200iD/7H",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/lrmate200id7h.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_lrmate200id_support",
+            "id": 192
+        },
+        {
+            "name": "LR Mate 200iD/7L",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/lrmate200id7l.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_lrmate200id_support",
+            "id": 193
+        },
+        {
+            "name": "LR Mate 200iD/7LC",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/lrmate200id7lc.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_lrmate200id_support",
+            "id": 194
+        }
+    ]
+}

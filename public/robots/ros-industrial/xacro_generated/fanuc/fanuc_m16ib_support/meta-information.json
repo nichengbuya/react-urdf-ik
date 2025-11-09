@@ -1,0 +1,16 @@
+{
+    "robots": [
+        {
+            "name": "M-16iB",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/m16ib20.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_m16ib_support",
+            "id": 198
+        }
+    ]
+}

@@ -1,0 +1,28 @@
+{
+    "robots": [
+        {
+            "name": "M-20iA",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/m20ia.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_m20ia_support",
+            "id": 199
+        },
+        {
+            "name": "M-20iA/10L",
+            "type": "robotic arm",
+            "manufacturer": "Fanuc",
+            "xacro-generated": true,
+            "urdf": [
+                "urdf/m20ia10l.urdf"
+            ],
+            "variant": null,
+            "source-link": "https://github.com/ros-industrial/fanuc/tree/74d7d441311590d3950b03da9a1a86409332c2e8/fanuc_m20ia_support",
+            "id": 200
+        }
+    ]
+}

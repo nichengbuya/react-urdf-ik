@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>React + Three.js + URDF IK</title>
+  <style>
+    html,
+    body,
+    #root {
+      height: 100%;
+      margin: 0;
+    }
+
+    .sidebar {
+      width: 320px;
+      padding: 12px;
+      border-right: 1px solid #eee;
+      box-sizing: border-box;
+    }
+
+    .app {
+      display: flex;
+      height: 100%;
+    }
+
+    .canvas-wrap {
+      flex: 1;
+      position: relative;
+      background: #0b0b0b;
+    }
+
+    .hud {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      color: #fff;
+      font: 12px/1.4 system-ui;
+    }
+
+    input[type="text"],
+    select,
+    button {
+      padding: 6px 8px;
+    }
+
+    .row {
+      margin-bottom: 8px;
+    }
+
+    .joint-list {
+      max-height: 200px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      background: #f7f7f7;
+      padding: 8px;
+      border: 1px solid #eee;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
