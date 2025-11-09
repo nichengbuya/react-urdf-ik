@@ -174,7 +174,8 @@ export default function App() {
   const [qDeg, setQDeg] = useState<Deg[]>([]);
   const viewerRef = useRef<URDFViewerHandle>(null);
 
-  const hasMeta = jointsMeta.length > 0;
+  const [handlePos, setHandlePos] = useState<[number, number, number]>([0, 0, 0]);
+  const [handleEulerDeg, setHandleEulerDeg] = useState<[number, number, number]>([0, 0, 0]);
   const initialPoseDegPreset: Deg[] = [0, -90, 100, 0, 60, 100];
 
   // ▼ 下拉交互
@@ -257,15 +258,6 @@ export default function App() {
     });
   };
 
-  const resetQ = () => {
-    if (!hasMeta) return;
-    const zeros = jointsMeta.map((j) => {
-      const lo = j.lower ?? (j.unit === "deg" ? -180 : -Infinity);
-      const hi = j.upper ?? (j.unit === "deg" ? 180 : Infinity);
-      return clamp(0, lo, hi);
-    });
-    setQDeg(zeros);
-  };
 
   // ▼ 搜索过滤（大小写不敏感；空格分词匹配）
   const filteredUrdfs = useMemo(() => {
@@ -448,19 +440,11 @@ export default function App() {
           <input value={eeLink} onChange={(e) => setEeLink(e.target.value)} style={INPUT_STYLE} />
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "12px 0 8px" }}>
-          <button onClick={resetQ} disabled={!hasMeta}>关节清零</button>
-          <button onClick={() => viewerRef.current?.recenterHandle()} disabled={!hasMeta} title="将把手移动到当前 FK 末端位姿">
-            重新摆放 handle
-          </button>
-          <span style={{ fontSize: 12, color: "#666" }}>（单位：° 或 m）</span>
-        </div>
-
         <div style={{ maxHeight: "52vh", overflow: "auto", paddingRight: 4 }}>
           {jointsMeta.map((j, i) => {
             const unitLabel = j.unit === "deg" ? "°" : "m";
             const min = j.lower ?? (j.unit === "deg" ? -180 : -1);
-            const max = j.upper ?? (j.unit === "deg" ?  180 :  1);
+            const max = j.upper ?? (j.unit === "deg" ? 180 : 1);
             const step = j.unit === "deg" ? 0.5 : 0.001;
             const val = clamp(qDeg[i] ?? 0, min, max);
             const finite = Number.isFinite(min) && Number.isFinite(max);
@@ -471,7 +455,7 @@ export default function App() {
                   <strong>{j.name}</strong>
                   <span style={{ color: "#666" }}>
                     [{Number.isFinite(min) ? min.toFixed(j.unit === "deg" ? 1 : 3) : "-∞"},
-                     {Number.isFinite(max) ? max.toFixed(j.unit === "deg" ? 1 : 3) : "+∞"}]{unitLabel}
+                    {Number.isFinite(max) ? max.toFixed(j.unit === "deg" ? 1 : 3) : "+∞"}]{unitLabel}
                     {"  "}类型: {j.type}
                   </span>
                 </div>
@@ -503,7 +487,124 @@ export default function App() {
               </div>
             );
           })}
+
+                  <div style={{ marginTop: 12, padding: 8, border: "1px solid #eee", borderRadius: 8 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Handle 位姿</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: 8, alignItems: "center" }}>
+            <span>X</span>
+            <input
+              type="number"
+              step={0.001}
+              value={handlePos[0]}
+              onChange={(e) => {
+                const x = Number(e.target.value);
+                const next: [number, number, number] = [x, handlePos[1], handlePos[2]];
+                setHandlePos(next);
+                viewerRef.current?.setHandlePose({ position: next });
+              }}
+              style={NUMBER_INPUT_STYLE}
+            />
+            <span>Y</span>
+            <input
+              type="number"
+              step={0.001}
+              value={handlePos[1]}
+              onChange={(e) => {
+                const y = Number(e.target.value);
+                const next: [number, number, number] = [handlePos[0], y, handlePos[2]];
+                setHandlePos(next);
+                viewerRef.current?.setHandlePose({ position: next });
+              }}
+              style={NUMBER_INPUT_STYLE}
+            />
+            <span>Z</span>
+            <input
+              type="number"
+              step={0.001}
+              value={handlePos[2]}
+              onChange={(e) => {
+                const z = Number(e.target.value);
+                const next: [number, number, number] = [handlePos[0], handlePos[1], z];
+                setHandlePos(next);
+                viewerRef.current?.setHandlePose({ position: next });
+              }}
+              style={NUMBER_INPUT_STYLE}
+            />
+          </div>
+
+          <div style={{ height: 8 }} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: 8, alignItems: "center" }}>
+            <span>Roll(°)</span>
+            <input
+              type="number"
+              step={0.5}
+              value={handleEulerDeg[0]}
+              onChange={(e) => {
+                const r = Number(e.target.value);
+                const next: [number, number, number] = [r, handleEulerDeg[1], handleEulerDeg[2]];
+                setHandleEulerDeg(next);
+                viewerRef.current?.setHandlePose({ eulerDeg: next });
+              }}
+              style={NUMBER_INPUT_STYLE}
+            />
+            <span>Pitch(°)</span>
+            <input
+              type="number"
+              step={0.5}
+              value={handleEulerDeg[1]}
+              onChange={(e) => {
+                const p = Number(e.target.value);
+                const next: [number, number, number] = [handleEulerDeg[0], p, handleEulerDeg[2]];
+                setHandleEulerDeg(next);
+                viewerRef.current?.setHandlePose({ eulerDeg: next });
+              }}
+              style={NUMBER_INPUT_STYLE}
+            />
+            <span>Yaw(°)</span>
+            <input
+              type="number"
+              step={0.5}
+              value={handleEulerDeg[2]}
+              onChange={(e) => {
+                const y = Number(e.target.value);
+                const next: [number, number, number] = [handleEulerDeg[0], handleEulerDeg[1], y];
+                setHandleEulerDeg(next);
+                viewerRef.current?.setHandlePose({ eulerDeg: next });
+              }}
+              style={NUMBER_INPUT_STYLE}
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button onClick={() => {
+              // 用当前 handle 位姿做一个 movelinear 目标（小幅上移 5 cm）
+              const target = {
+                position: [handlePos[0], handlePos[1], handlePos[2] - 0.05] as [number, number, number],
+                euler: handleEulerDeg.map(d => d * Math.PI / 180) as [number, number, number],
+              };
+              viewerRef.current?.startMoveLinear(target, {
+                linear: 0.25,
+                angularDeg: 60,
+                smooth: true,
+                rateScale: 1.0,
+                tauPos: 0.02, tauRot: 0.02, preferAnalytic: true,
+              });
+            }}>从 Handle 直线 +5cm</button>
+          </div>
+
+
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button onClick={() => {
+                viewerRef.current?.startMoveJoint([0, 0, 0, 0, 0, 0], { speed: 1, smooth: true });
+              }}>movejoint</button>
+          </div>
+
         </div>
+        </div>
+
+
       </div>
 
       <div style={{ position: "relative", flex: 1, background: "#0b0b0b" }}>
@@ -514,7 +615,11 @@ export default function App() {
           eeLink={eeLink}
           qDeg={qDeg}
           onJointsReady={onJointsReady}
-          onQChange={onQChangeFromViewer} // 仅内部更新时触发，避免死循环
+          onQChange={onQChangeFromViewer}
+          onHandleChange={(pose) => {
+            setHandlePos(pose.position);
+            setHandleEulerDeg(pose.eulerDeg);
+          }}
         />
       </div>
     </div>

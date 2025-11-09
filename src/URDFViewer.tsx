@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState, useImperativeHandle } from "react";
+import React, { useEffect, useMemo, useRef, useState, useImperativeHandle, useCallback } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import URDFKinematics from "./kinematics";
-
+THREE.Object3D.DEFAULT_UP = new THREE.Vector3( 0, 0, 1)
 export type JointMeta = {
   name: string;
   type: "revolute" | "continuous" | "prismatic";
@@ -11,8 +11,33 @@ export type JointMeta = {
   lower: number | null;
   upper: number | null;
 };
-export type URDFViewerHandle = { recenterHandle: () => void; };
-
+export type URDFViewerHandle = {
+  recenterHandle: () => void;
+  // ★ 新增：双向控制 handle
+  getHandlePose: () => {
+    position: [number, number, number];
+    euler: [number, number, number];       // 弧度 (XYZ)
+    quaternion: [number, number, number, number];
+    matrix: number[];                       // 4x4 列主序
+  };
+  setHandlePose: (pose: {
+    position?: [number, number, number];
+    eulerDeg?: [number, number, number];    // 用度数设置更直观
+    eulerRad?: [number, number, number];
+    quaternion?: [number, number, number, number];
+  }) => void;
+  startMoveJoint: (targetDeg: number[], opts?: { speed?: number | number[]; smooth?: boolean }) => void;
+  startMoveLinear: (
+    target: THREE.Matrix4 | {
+      position?: THREE.Vector3 | [number, number, number];
+      quaternion?: THREE.Quaternion | [number, number, number, number];
+      euler?: [number, number, number]; // [roll,pitch,yaw] in rad
+      matrix?: number[];
+    },
+    opts?: { linear?: number; angularDeg?: number; smooth?: boolean; rateScale?: number; tauPos?: number; tauRot?: number; preferAnalytic?: boolean }
+  ) => void;
+  cancelMotion: () => void;
+};
 
 
 type Props = {
@@ -22,6 +47,11 @@ type Props = {
   qDeg?: number[];
   onJointsReady: (meta: JointMeta[]) => void;
   onQChange: (qRad: number[]) => void; // 仅在内部 IK/拖拽时回调
+  onHandleChange?: (pose: {
+    position: [number, number, number];
+    eulerDeg: [number, number, number];
+    quaternion: [number, number, number, number];
+  }) => void;
 };
 
 
@@ -39,6 +69,52 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
   const draggingRef = useRef(false);
   const latestTargetRef = useRef<THREE.Matrix4 | null>(null);
   const settleUntilRef = useRef<number>(0);
+  const motionRef = useRef<ReturnType<URDFKinematics["movejoint"]> | ReturnType<URDFKinematics["movelinear"]> | null>(null);
+  const pendingTargetDegRef = useRef<number[] | null>(null); // 等 build 后启动的关节运动
+  const pendingLinearRef = useRef<{ target: any; opts?: any } | null>(null); // 等 build 后启动的直线运动
+
+  const emitHandlePose = useCallback(() => {
+    if (!handleRef.current || !props.onHandleChange) return;
+    const h = handleRef.current;
+    const p = h.position;
+    const q = h.quaternion;
+    const e = new THREE.Euler().setFromQuaternion(q, "XYZ");
+    props.onHandleChange({
+      position: [p.x, p.y, p.z],
+      eulerDeg: [e.x, e.y, e.z].map(v => (v * 180 / Math.PI)) as [number, number, number],
+      quaternion: [q.x, q.y, q.z, q.w],
+    });
+  }, [props]);
+
+  const setHandlePoseInternal = useCallback((pose: {
+    position?: [number, number, number];
+    eulerDeg?: [number, number, number];
+    eulerRad?: [number, number, number];
+    quaternion?: [number, number, number, number];
+  }) => {
+    if (!handleRef.current) return;
+    const h = handleRef.current;
+
+    if (pose.position) {
+      const [x, y, z] = pose.position;
+      h.position.set(x, y, z);
+    }
+    if (pose.quaternion) {
+      const [qx, qy, qz, qw] = pose.quaternion;
+      h.quaternion.set(qx, qy, qz, qw).normalize();
+    } else if (pose.eulerRad) {
+      const [rx, ry, rz] = pose.eulerRad;
+      h.quaternion.setFromEuler(new THREE.Euler(rx, ry, rz, "XYZ"));
+    } else if (pose.eulerDeg) {
+      const [rx, ry, rz] = pose.eulerDeg.map(d => d * Math.PI / 180) as [number, number, number];
+      h.quaternion.setFromEuler(new THREE.Euler(rx, ry, rz, "XYZ"));
+    }
+
+    h.updateMatrixWorld(true);
+    latestTargetRef.current = h.matrixWorld.clone(); // 让 IK 目标也同步
+    settleUntilRef.current = performance.now() + 250;  // 200~300ms 都可以
+    emitHandlePose();
+  }, [emitHandlePose]);
 
   useImperativeHandle(ref, () => ({
     recenterHandle() {
@@ -52,8 +128,40 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
       handleRef.current.position.copy(pos);
       handleRef.current.quaternion.copy(quat);
       handleRef.current.updateMatrixWorld(true);
+      latestTargetRef.current = handleRef.current.matrixWorld.clone();
+      emitHandlePose();
+    },
+    getHandlePose() {
+      const h = handleRef.current!;
+      const e = new THREE.Euler().setFromQuaternion(h.quaternion, "XYZ");
+      return {
+        position: [h.position.x, h.position.y, h.position.z] as [number, number, number],
+        euler: [e.x, e.y, e.z] as [number, number, number],
+        quaternion: [h.quaternion.x, h.quaternion.y, h.quaternion.z, h.quaternion.w] as [number, number, number, number],
+        matrix: h.matrixWorld.toArray(),
+      };
+    },
+    setHandlePose(pose) {
+      setHandlePoseInternal(pose);
+    },
+    startMoveJoint(targetDeg, opts) {
+      if (!builtRef.current) { pendingTargetDegRef.current = targetDeg.slice(); return; }
+      const targetRad = targetDeg.map((v, i) =>
+        kin.joints[i]?.type === "prismatic" ? v : (v * Math.PI / 180)
+      );
+      motionRef.current = kin.movejoint(targetRad, { speed: opts?.speed, smooth: opts?.smooth });
+    },
+    startMoveLinear(target, opts) {
+      if (!builtRef.current) { pendingLinearRef.current = { target, opts }; return; }
+      motionRef.current = kin.movelinear(target, opts);
+    },
+    cancelMotion() {
+      motionRef.current?.cancel();
+      motionRef.current = null;
     },
   }));
+
+
 
 
   // ★ 外部 qDeg 变动时，只同步到机器人，不再 onQChange 回传，防止回声环
@@ -85,6 +193,7 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
         handleRef.current.position.copy(pos);
         handleRef.current.quaternion.copy(quat);
         handleRef.current.updateMatrixWorld(true);
+        emitHandlePose();
       }
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,7 +209,7 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
     mountRef.current.appendChild(r.domElement);
 
     const cam = new THREE.PerspectiveCamera(50, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.01, 200);
-    cam.position.set(1.6, 1.1, 2.2);
+    cam.position.set(1.6, -2.2, 1.1);
 
     const orbit = new OrbitControls(cam, r.domElement);
     orbit.enableDamping = true;
@@ -153,16 +262,34 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
       last = now;
 
       const needSettle = now < settleUntilRef.current;
-      const shouldSolve = draggingRef.current || needSettle;
-
-      if (shouldSolve && latestTargetRef.current) {
-        const res = kin.updateTowards(latestTargetRef.current, dt, {
-          tauPos: 0.001,
-          tauRot: 0.001,
-          rateScale: 1.0,
-        });
-        // ★ 只有“内部”求解时才回传
+      if (motionRef.current) {
+        const res = motionRef.current.update(dt);
         onQChange(res.q);
+        if (res.done) {
+          // 运动完成后，同步 handle 到最新 FK，保证视觉一致
+          motionRef.current = null;
+          if (handleRef.current) {
+            const T = kin.fk(res.q);
+            const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+            T.decompose(p, q, s);
+            handleRef.current.position.copy(p);
+            handleRef.current.quaternion.copy(q);
+            handleRef.current.updateMatrixWorld(true);
+            latestTargetRef.current = handleRef.current.matrixWorld.clone();
+             emitHandlePose();
+          }
+        }
+      } else {
+        // 2) 没有运动时，才根据拖拽/缓和去 IK
+        const shouldSolve = draggingRef.current || needSettle;
+        if (shouldSolve && latestTargetRef.current) {
+          const res = kin.updateTowards(latestTargetRef.current, dt, {
+            tauPos: 0.001,
+            tauRot: 0.001,
+            rateScale: 1.0,
+          });
+          onQChange(res.q);
+        }
       }
 
       orbitRef.current?.update();
@@ -182,7 +309,20 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
       try {
         // 省略 build 细节…（保持你原先的）
         await kin.build({ urdfUrl, baseLink, eeLink, radians: true, pkg: derivePkgMap(urdfUrl) });
-
+        if (pendingTargetDegRef.current) {
+          const tmp = pendingTargetDegRef.current.slice();
+          pendingTargetDegRef.current = null;
+          motionRef.current = kin.movejoint(
+            tmp.map((v, i) => kin.joints[i]?.type === "prismatic" ? v : (v * Math.PI / 180)),
+            { speed: 0.8, smooth: true }
+          );
+        }
+        // 若有挂起的直线运动，立即启动
+        if (pendingLinearRef.current) {
+          const { target, opts } = pendingLinearRef.current;
+          pendingLinearRef.current = null;
+          motionRef.current = kin.movelinear(target, opts);
+        }
         onJointsReady(
           kin.joints.map((j: any) => ({
             name: j.name,
@@ -199,7 +339,10 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
         const dl = new THREE.DirectionalLight(0xffffff, 0.8);
         dl.position.set(3, 5, 2);
         scene.add(dl);
-        scene.add(new THREE.GridHelper(4, 40, 0x888888, 0x444444));
+        const gridHelper = new THREE.GridHelper(4, 40, 0x888888, 0x444444);
+        gridHelper.rotation.x = -Math.PI / 2; 
+
+        scene.add(gridHelper);
 
         const handle = new THREE.Mesh(
           new THREE.SphereGeometry(0.03, 12, 12),
@@ -221,12 +364,14 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
           handle.quaternion.copy(q);
           handle.updateMatrixWorld(true);
           latestTargetRef.current = handle.matrixWorld.clone();
+          emitHandlePose();
         }
 
         // 拖拽时更新 target
         tctrl.addEventListener("change", () => {
           if (!handleRef.current) return;
           if (draggingRef.current) latestTargetRef.current = handleRef.current.matrixWorld.clone();
+           emitHandlePose();
         });
         tctrl.addEventListener("dragging-changed", (e: any) => {
           const dragging = !!e.value;
@@ -244,6 +389,7 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
               handleRef.current.position.copy(p);
               handleRef.current.quaternion.copy(qb);
               handleRef.current.updateMatrixWorld(true);
+               emitHandlePose();
             }
           }
         });
@@ -286,13 +432,13 @@ function derivePkgMap(urdfUrl: string): Record<string, string> {
   if (!m) return {};
   const baseDir = m[1];           // /robots/ros-industrial/abb/
   const pkgName = m[2];           // abb_irb2400_support
-  const model   = m[3];           // irb2400
+  const model = m[3];           // irb2400
   const pkgRoot = `${baseDir}${pkgName}/`;
 
   // 三个“包名”都映射：主包 + visual + collision
   return {
     [pkgName]: pkgRoot,
-    visual:    `${pkgRoot}meshes/${model}/visual/`,
+    visual: `${pkgRoot}meshes/${model}/visual/`,
     collision: `${pkgRoot}meshes/${model}/collision/`,
   };
 }

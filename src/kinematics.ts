@@ -45,20 +45,7 @@ export interface AnalyticConfig {
   // 解选择：更偏好与当前 q 最近
   preferNearToQ?: boolean;
 }
-function isApproximatelySphericalWrist(urdfJoints: JointInfo[]): boolean {
-  // 简单启发：检查 4、5、6 关节之间的连接是否几乎都是“纯旋转、无平移”
-  // 这里用 urdf-loader 的 node.origin 取不方便，我们用已有的 URDF: 若 link_4->link_5 或 link_5->link_6 的 |xyz| 明显>几毫米，就不是球腕。
-  // 实操：我们在 build 之后从 joints[i].node?.origin?.xyz 抓；如果取不到就保守返回 false
-  try {
-    const j5 = urdfJoints[4]?.node, j6 = urdfJoints[5]?.node;
-    const t45 = j5?.origin?.xyz || [0, 0, 0];
-    const t56 = j6?.origin?.xyz || [0, 0, 0];
-    const L45 = Math.hypot(t45[0], t45[1], t45[2]);
-    const L56 = Math.hypot(t56[0], t56[1], t56[2]);
-    // 球腕通常 < 1~2mm，这里阈值给得宽松一点
-    return L45 < 0.01 && L56 < 0.01;
-  } catch { return false; }
-}
+
 export default class URDFKinematics {
   public scene: THREE.Scene = new THREE.Scene();
   public robot!: URDFRobot;
@@ -94,7 +81,7 @@ export default class URDFKinematics {
 
     this.scene = new THREE.Scene();
     this.robotGroup = new THREE.Group();
-    this.robotGroup.rotation.x = -Math.PI / 2; // ROS(Z) → Three(Y)
+    // this.robotGroup// ROS(Z) → Three(Y)
     this.scene.add(this.robotGroup);
 
     this.robot = robot;
@@ -499,9 +486,221 @@ export default class URDFKinematics {
     this._lastTQuat!.copy(Rf);
     return this._Tfiltered;
   }
+
+    movejoint(
+    target: number[],
+    opts?: {
+      speed?: number | number[];       // 目标关节速度上限（若缺省，用 URDF velocity 的 0.8 倍）
+      smooth?: boolean;                // 是否余弦平滑启停
+    }
+  ): MoveHandle {
+    const n = this.joints.length;
+    if (!Array.isArray(target) || target.length !== n) {
+      throw new Error(`movejoint: target size ${target?.length} != DOF ${n}`);
+    }
+
+    // 读取当前姿态作为起点
+    const q0 = (this._qLast ?? this.getQ()).slice();
+    const qT = target.slice();
+
+    // 速度上限（逐关节）
+    const base = this._jointRateLimit.map(v => v * 0.8); // 默认更保守
+    let vmax: number[] = base.slice();
+    if (typeof opts?.speed === 'number') vmax = new Array(n).fill(Math.max(1e-6, opts.speed));
+    else if (Array.isArray(opts?.speed) && opts!.speed.length === n) {
+      vmax = opts!.speed.map((v, i) => Math.max(1e-6, Math.min(v, base[i])));
+    }
+
+    // 计算最大持续时间（取所有关节的时间上界）
+    const dq = qT.map((v, i) => wrapToPi(v - q0[i]));
+    const ti = dq.map((d, i) => Math.abs(d) / Math.max(1e-6, vmax[i]));
+    const T = Math.max(1e-6, ...ti);
+
+    let t = 0;
+    let canceled = false;
+    const smooth = opts?.smooth ?? true;
+
+    const update = (dt: number) => {
+      if (canceled) return { done: true, q: this._qLast ?? this.getQ() };
+      t = Math.min(T, t + Math.max(0, dt));
+      // 进度参数 s in [0,1]
+      let s = T <= 0 ? 1 : t / T;
+      if (smooth) s = 0.5 - 0.5 * Math.cos(Math.PI * s); // 余弦启停
+      const q = new Array(n);
+      for (let i = 0; i < n; i++) q[i] = wrapToPi(q0[i] + dq[i] * s);
+
+      this.setQ(q);
+      this._qLast = q;
+
+      const done = t >= T - 1e-9;
+      return { done, q };
+    };
+
+    return {
+      duration: T,
+      update,
+      cancel: () => { canceled = true; },
+      progress: () => (T <= 0 ? 1 : Math.min(1, t / T)),
+      kind: 'joint'
+    };
+  }
+
+  /**
+   * 笛卡尔直线运动：末端 TCP 沿直线匀速（平滑启停），姿态用 slerp 匀角速
+   * target 可传 Matrix4，或 { position, quaternion/euler } 的对象
+   * 速度：linear (m/s)，angularDeg (°/s) 可选；若只给 linear，则时长以线速度决定
+   */
+  movelinear(
+    target: PoseLike,
+    opts?: {
+      linear?: number;         // m/s（默认 0.2）
+      angularDeg?: number;     // °/s（默认 45）
+      smooth?: boolean;        // 余弦启停
+      rateScale?: number;      // 传给 updateTowards 的内部关节速率比例（默认 1）
+      tauPos?: number;         // 目标滤波时间常数（降低颤动），默认 0.02
+      tauRot?: number;         // 同上
+      preferAnalytic?: boolean;// 优先解析 IK，默认 true
+    }
+  ): MoveHandle {
+    const lin = Math.max(1e-6, opts?.linear ?? 0.2);
+    const ang = Math.max(1e-6, (opts?.angularDeg ?? 45) * Math.PI / 180);
+    const smooth = opts?.smooth ?? true;
+
+    // 起点位姿（用当前 ee）
+    const T0 = this.ee.matrixWorld.clone();
+    const p0 = new THREE.Vector3().setFromMatrixPosition(T0);
+    const q0 = new THREE.Quaternion().setFromRotationMatrix(T0);
+
+    // 目标位姿规格化到 Matrix4
+    const T1 = normalizePoseLikeToMat4(target);
+    const p1 = new THREE.Vector3().setFromMatrixPosition(T1);
+    const q1 = new THREE.Quaternion().setFromRotationMatrix(T1);
+
+    // 距离与角距
+    const L = p0.distanceTo(p1);
+    let angDist = 2 * Math.acos(Math.min(1, Math.abs(q0.dot(q1))));
+    // 角距离取 [0, π]
+    angDist = Math.min(Math.PI, Math.max(0, angDist));
+
+    const TLin = L / lin;
+    const TAng = angDist / ang;
+    const T = Math.max(1e-6, TLin, TAng);
+
+    let t = 0;
+    let canceled = false;
+
+    const update = (dt: number) => {
+      if (canceled) return { done: true, q: this._qLast ?? this.getQ() };
+      t = Math.min(T, t + Math.max(0, dt));
+      let s = T <= 0 ? 1 : t / T;
+      if (smooth) s = 0.5 - 0.5 * Math.cos(Math.PI * s); // 平滑启停
+
+      // 线性插值位置 + slerp插值姿态
+      const p = p0.clone().lerp(p1, s);
+      const q = q0.clone().slerp(q1, s);
+      const Td = new THREE.Matrix4().makeRotationFromQuaternion(q);
+      Td.setPosition(p);
+
+      // 交给已有的 IK 跟踪器推进一次（用外部 dt）
+      const res = this.updateTowards(Td, Math.max(1e-4, dt), {
+        tauPos: opts?.tauPos ?? 0.02,
+        tauRot: opts?.tauRot ?? 0.02,
+        rateScale: opts?.rateScale ?? 1,
+        preferAnalytic: opts?.preferAnalytic ?? true,
+      });
+
+      const done = t >= T - 1e-9;
+      return { done, q: res.q };
+    };
+
+    return {
+      duration: T,
+      update,
+      cancel: () => { canceled = true; },
+      progress: () => (T <= 0 ? 1 : Math.min(1, t / T)),
+      kind: 'linear'
+    };
+  }
 }
 
+
+
+
 /* ====== 解析 IK & DLS 的小工具 ====== */
+/* ========= 小工具 & 类型 ========= */
+
+export interface MoveHandle {
+  /** 预计总时长（秒） */
+  duration: number;
+  /** 每帧调用推进；返回 { done, q }；done=true 表示运动完成 */
+  update: (dt: number) => { done: boolean; q: number[] };
+  /** 取消本次运动 */
+  cancel: () => void;
+  /** 0~1 的进度估计 */
+  progress: () => number;
+  /** 运动类型：'joint' | 'linear'（可用于上层 UI 展示） */
+  kind: 'joint' | 'linear';
+}
+
+export type PoseLike =
+  | THREE.Matrix4
+  | {
+      position?: THREE.Vector3 | [number, number, number];
+      quaternion?: THREE.Quaternion | [number, number, number, number];
+      euler?: [number, number, number]; // [roll, pitch, yaw] (rad)
+      matrix?: number[];                // 长度16的列主序数组（可选）
+    };
+
+function normalizePoseLikeToMat4(p: PoseLike): THREE.Matrix4 {
+  if (p instanceof THREE.Matrix4) return p.clone();
+
+  if (p?.matrix && Array.isArray(p.matrix) && p.matrix.length === 16) {
+    const m = new THREE.Matrix4();
+    m.fromArray(p.matrix);
+    return m;
+  }
+  const posArr = Array.isArray(p?.position) ? p!.position as number[] : null;
+  const posVec = (p?.position instanceof THREE.Vector3) ? p.position as THREE.Vector3 : null;
+  const eulerArr = Array.isArray(p?.euler) ? p!.euler as number[] : null;
+  const quatArr  = Array.isArray(p?.quaternion) ? p!.quaternion as number[] : null;
+  const quatObj  = (p?.quaternion instanceof THREE.Quaternion) ? p.quaternion as THREE.Quaternion : null;
+
+  const T = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+
+  if (quatObj) q.copy(quatObj);
+  else if (quatArr) q.set(quatArr[0], quatArr[1], quatArr[2], quatArr[3]).normalize();
+  else if (eulerArr) {
+    const e = new THREE.Euler(eulerArr[0], eulerArr[1], eulerArr[2], 'XYZ');
+    q.setFromEuler(e);
+  } else {
+    q.identity();
+  }
+  T.makeRotationFromQuaternion(q);
+
+  const t = new THREE.Vector3();
+  if (posVec) t.copy(posVec);
+  else if (posArr) t.set(posArr[0], posArr[1], posArr[2]);
+  else t.set(0, 0, 0);
+
+  T.setPosition(t);
+  return T;
+}
+
+function isApproximatelySphericalWrist(urdfJoints: JointInfo[]): boolean {
+  // 简单启发：检查 4、5、6 关节之间的连接是否几乎都是“纯旋转、无平移”
+  // 这里用 urdf-loader 的 node.origin 取不方便，我们用已有的 URDF: 若 link_4->link_5 或 link_5->link_6 的 |xyz| 明显>几毫米，就不是球腕。
+  // 实操：我们在 build 之后从 joints[i].node?.origin?.xyz 抓；如果取不到就保守返回 false
+  try {
+    const j5 = urdfJoints[4]?.node, j6 = urdfJoints[5]?.node;
+    const t45 = j5?.origin?.xyz || [0, 0, 0];
+    const t56 = j6?.origin?.xyz || [0, 0, 0];
+    const L45 = Math.hypot(t45[0], t45[1], t45[2]);
+    const L56 = Math.hypot(t56[0], t56[1], t56[2]);
+    // 球腕通常 < 1~2mm，这里阈值给得宽松一点
+    return L45 < 0.01 && L56 < 0.01;
+  } catch { return false; }
+}
 
 function collectChain(base: THREE.Object3D, ee: THREE.Object3D): THREE.Object3D[] | null {
   const stack: THREE.Object3D[] = [];
