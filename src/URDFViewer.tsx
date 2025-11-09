@@ -272,6 +272,9 @@ const URDFViewer = React.forwardRef<URDFViewerHandle, Props>((props, ref) => {
       <div style={{ position: "absolute", left: 12, top: 12, color: "#fff", font: "12px/1.4 ui-monospace,monospace", pointerEvents: "none", textShadow: "0 1px 2px rgba(0,0,0,.6)" }}>
         {info}
       </div>
+      <div style={{ position: "absolute", right: 12, top: 12, color: "#fff", font: "12px/1.4 ui-monospace,monospace", pointerEvents: "none", textShadow: "0 1px 2px rgba(0,0,0,.6)" }}>
+        {'按T/R 切换平移/旋转'}
+      </div>
     </>
   );
 });
